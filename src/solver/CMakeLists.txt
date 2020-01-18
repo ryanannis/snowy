@@ -7,6 +7,10 @@ target_sources(
     PRIVATE
         CPUSolver.cpp
         CPUSolver.hpp
+        Grid.cpp
+        Grid.hpp
+        Particle.cpp
+        Particle.hpp
     PUBLIC
 )
 
@@ -16,4 +20,9 @@ target_include_directories(
     ../../extlib/glm
     ../utils
     PUBLIC
+)
+
+target_link_libraries(
+    solverlib
+    utils
 )

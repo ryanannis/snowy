@@ -1,6 +1,7 @@
 project(target)
 
 add_subdirectory(solver)
+add_subdirectory(utils)
 
 add_executable(main main.cpp)
 

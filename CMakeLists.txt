@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project (snow)
 
+
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 0)
 set(VERSION_PATCH 0)
@@ -18,11 +19,12 @@ include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
 
 # Global include dirs both test and src
 include_directories(${CMAKE_BINARY_DIR}/extlib/glm)
+include_directories(${CMAKE_BINARY_DIR}/extlib/svd)
 include_directories(${PROJECT_SOURCE_DIRECTORY}/solver)
 include_directories(${PROJECT_SOURCE_DIRECTORY}/utils)
 
 # Testing
-ADD_SUBDIRECTORY(test)
+# ADD_SUBDIRECTORY(test)
 
 # Binaries
 add_subdirectory(src)
