@@ -15,4 +15,5 @@ target_sources(
 target_link_libraries(
     main
     solverlib
+    utils
 )

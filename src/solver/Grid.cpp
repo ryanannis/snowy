@@ -1,5 +1,5 @@
 #include "Grid.hpp"
-#include "Particle.hpp"
+#include "ParticleSystem.hpp"
 
 Float N_x(Float x)
 {
@@ -9,7 +9,8 @@ Float N_x(Float x)
     Float abx = std::abs(x);
     Float x3 = abx * x2;
 
-    assert(abx < 2.5);
+    // Check we didn't feed any cells outside kernel boundaries
+    assert(abx <= 2.0);
 
     if (abx < 1)
     {
@@ -20,10 +21,9 @@ Float N_x(Float x)
         res = (-1.0 / 6.0 * x3) + (x2) - (2.0 * abx) + (4.0/3.0); 
     }
 
-    assert(res > 0.0);
-    assert(res < 1.0);
+    ASSERT_VALID_FLOAT(res);
 
-    return res / H;
+    return res;
 }
 
 
@@ -35,200 +35,130 @@ Float dN_x(Float x)
     Float abx = std::abs(x);
     Float sgnx = x / std::abs(x);
 
-    assert(abx < 2.5);
+    // Check we didn't feed any cells outside kernel boundaries
+    assert(abx <= 2.0);
 
-    if (abx < 1)
+    if (abx < EPSILON) {
+        res = 0;
+    }
+    else if (abx < 1)
     {
-        res =  (1.5 * x2 * sgnx) - (2 * x); 
+        res =  (1.5 * x2 * sgnx) - (2.0 * x); 
     }
     else
     {
         res = (-0.5 * x2 * sgnx) + (2.0 * x) - (2.0 * sgnx); 
     }
 
-    assert(res > 0.0);
-    assert(res < 1.0);
+    ASSERT_VALID_FLOAT(res);
 
-    return res / H;
+    return res;
 }
 
-Float gridWeight(Float x, Float ix, Float y, Float iy, Float z, Float iz)
+// This is called with coordinates normalized to the size of the grid
+// (eg. divided by h)
+Float gridWeight(const SimulationParameters& s, Float x, Float ix, Float y, Float iy, Float z, Float iz)
 {
-    return N_x(x - ix) * N_x(y - iy) + N_x(z - iz);
+    return N_x(x - ix) * N_x(y - iy) * N_x(z - iz);
 }
 
-Vec3 gridWeightGrad(Float x, Float ix, Float y, Float iy, Float z, Float iz)
+Vec3 gridWeightGrad(const SimulationParameters& s, Float x, Float ix, Float y, Float iy, Float z, Float iz)
 {
     Float dx = x - ix;
     Float dy = y - iy;
     Float dz = z - iz;
 
     return Vec3(
-        dN_x(dx) * N_x(dy) + N_x(dz),
-        N_x(dx) * dN_x(dy) + N_x(dz),
-        N_x(dx) * N_x(dy) + dN_x(dz)
-    ); // todo:  the H?
+        dN_x(dx) * N_x(dy)  * N_x(dz),
+        N_x(dx)  * dN_x(dy) * N_x(dz),
+        N_x(dx)  * N_x(dy)  * dN_x(dz)
+    ) / s.H; // todo:  is this derivative right??
 }
 
 
-Grid::Grid(Uint lenI, Uint lenJ, Uint lenK) : 
-    mLenI(lenI),
-    mLenJ(lenJ),
-    mLenK(lenK),
-    mCells(lenI * lenJ * lenK)
+Grid::Grid(const SimulationParameters& params, const IVec3& dims) :
+    mParams(params),
+    mDims(dims),
+    mCells(dims.x * dims.y * dims.z)
 {
 }
 
 Cell& Grid::Get(Uint i, Uint j, Uint k)
 {
-    if (i < 0 || i >= mLenI || 
-        j < 0 || j >= mLenJ ||
-        k < 0 || k >= mLenK)
-    {
-        mDummyCell = Cell(); // reset dummycell
-        return mDummyCell;
-    }
-
     return mCells[coordToIdx(i, j, k)];
 }
 
 Cell Grid::Get(Uint i, Uint j, Uint k) const
 {
-    if (i < 0 || i >= mLenI || 
-        j < 0 || j >= mLenJ ||
-        k < 0 || k >= mLenK)
-    {
-        return Cell();
-    }
-
     return mCells[coordToIdx(i, j, k)];
+}
+
+const IVec3& Grid::Dims() const
+{
+    return mDims;
 }
 
 Uint Grid::coordToIdx(Uint i, Uint j, Uint k) const
 {
-    return i * mLenI * mLenJ + j * mLenJ + k;
+    return i * mDims.x * mDims.y + j * mDims.y + k;
 }
 
-void Grid::TransferParticlesToGrid(std::vector<Particle>& particles)
+void Grid::RasterizeParticlesToGrid(const ParticleSystem& ps)
 {
-    // Calculate interpolation weights for a 2x2 kernel
-    // todo:  this is repeated many time, but I also don't trust the 
-    // compiler enough to use a lambda...
-    for (auto& particle : particles) 
+    for (const auto& particle : ps.GetParticles())
     {
-        particle.Mass = 0;
-        particle.Velocity = {};
+        WeightOverParticleNeighbourhood(
+            mParams, *this, particle.pos,
+            [&](IVec3 pos, Float weight) {
+                // Transfer mass
+                Get(pos.x, pos.y, pos.z).Mass += weight * particle.mass;
 
-        Float x = particle.Position.x;
-        Float y = particle.Position.y;
-        Float z = particle.Position.z;
-        for (int i = -1; i <= 2; i++)
-        {
-            for (int j = -1; j <= 2; j++)
-            {
-                for (int k = -1; k <= 2; k++)
-                {
-                    // The coordinate of the cell we are rasterizing to
-                    int ix = static_cast<int>(x) + i;
-                    int iy = static_cast<int>(y) + j;
-                    int iz = static_cast<int>(z) + k ;
-
-                    Float nx = gridWeight(x, ix, y, iy, z, iz);
-
-                    // Transfer mass
-                    Get(ix, iy, iz).Mass += nx * particle.Mass;
-
-                    // Transfer velocity (normalized)
-                    Get(ix, iy, iz).Velocity += particle.Velocity * particle.Mass * nx;
-                }
+                // Transfer velocity (normalized)
+                Get(pos.x, pos.y, pos.z).Velocity += particle.velocity * particle.mass * weight;
             }
-        }
+        );
     }
 
-    // Iterate over all cells for velocity normalization step
-    for (int i = 0; i < LenI(); i++)
-    {
-        for (int j = 0; j < LenJ(); j++)
-        {
-            for (int k = 0; k < LenK(); k++)
-            {
-                Get(i, j, k).Velocity /= Get(i, j, k).Mass;
-            }
-        }
+    // Normalize
+    for (auto& cell : mCells) {
+        if (cell.Mass == 0) continue;
+        cell.Velocity /= cell.Mass;
     }
 }
 
-void Grid::EstimateParticleVolumes(std::vector<Particle>& particles)
+void Grid::ComputeGridForces(const ParticleSystem& ps)
 {
-    for (auto& particle : particles) 
-    {
-        Float x = particle.Position.x;
-        Float y = particle.Position.y;
-        Float z = particle.Position.z;
+    for (const auto& particle : ps.GetParticles()) {
+        WeightGradOverParticleNeighbourhood(
+            mParams, *this, particle.pos,
+            [&](IVec3 pos, Vec3 weightgrad) {
+                Mat3 stress = ps.CalculateCauchyStress(particle);
+                Vec3 dforce = particle.volume * stress * weightgrad;
+                ASSERT_VALID_VEC3(dforce);
 
-        Float particleDensity = 0;
-
-        for (int i = -1; i <= 2; i++)
-        {
-            for (int j = -1; j <= 2; j++)
-            {
-                for (int k = -1; k <= 2; k++)
-                {
-                    // The coordinate of the cell we are rasterizing to
-                    int ix = static_cast<int>(x) + i;
-                    int iy = static_cast<int>(y) + j;
-                    int iz = static_cast<int>(z) + k ;
-
-                    Float cellvolume = H * H * H;
-
-                    Float nx = gridWeight(x, ix, y, iy, z, iz);
-
-                    particleDensity += nx * Get(ix, iy, iz).Mass / cellvolume;
-                }
+                Get(pos.x, pos.y, pos.z).Force += dforce;
             }
-        }
-
-        particle.Volume = particle.Mass / particleDensity ;
-    }
-}
-
-void Grid::ComputeGridForces(std::vector<Particle>& particles)
-{
-    // Clear forces
-    for (auto& c : mCells) {
-        c.Force = {};
-    }
-
-    for (auto& particle : particles) 
-    {
-        Float x = particle.Position.x;
-        Float y = particle.Position.y;
-        Float z = particle.Position.z;
-
-        for (int i = -1; i <= 2; i++)
-        {
-            for (int j = -1; j <= 2; j++)
-            {
-                for (int k = -1; k <= 2; k++)
-                {
-                    // The coordinate of the cell we are rasterizing to
-                    int ix = static_cast<int>(particle.Position.x) + i;
-                    int iy = static_cast<int>(particle.Position.y) + j;
-                    int iz = static_cast<int>(particle.Position.z) + k ;
-
-                    Vec3 nxGrad = gridWeightGrad(x, ix, y, iy, z, iz);
-
-                    Get(ix, iy, iz).Force += particle.Volume * particle.CalculateCauchyStress() * nxGrad;
-                }
-            }
-        }
+        );
     }
 }
 
 void Grid::UpdateGridVelocities(Float timestep) {
     for (auto& c : mCells) {
+        // Add gravity
+        c.Force += Vec3(0.0, 0.0, mParams.GRAVITY * c.Mass);
+
         c.Velocity = c.VelocityStar;
-        c.VelocityStar += timestep / c.Mass * c.Force;
+        
+        // Possible to be zero if a particle moved out of the cell in the last time step
+        if(c.Mass > 0) {
+            c.VelocityStar += timestep / c.Mass * c.Force;
+            ASSERT_VALID_VEC3(c.VelocityStar);
+        }
+        
+        // Reset
+        c.Force = Vec3(0.0);
+        c.Mass = 0;
+        c.Velocity = Vec3(0.0);
     }
 }
 
@@ -237,17 +167,20 @@ void Grid::DoGridBasedCollisions(Float timestep)
     // todo:
 }
 
-void Grid::VelocityImplicitUpdate(Float timestep)
+void Grid::SolveLinearSystem(Float timestep)
 {
     // todo:  only explicit update right nowD
+    for (auto& c : mCells) {
+        c.VelocityNext = c.VelocityStar;
+    }
 }
 
 std::ostream &operator<<(std::ostream &os, Grid const &g) { 
-    for (int i = 0; i < g.mLenI; i++)
+    for (int i = 0; i < g.mDims.x; i++)
     {
-        for (int j = 0; j < g.mLenJ; j++)
+        for (int j = 0; j < g.mDims.y; j++)
         {
-            for (int k = 0; k < g.mLenK; k++)
+            for (int k = 0; k < g.mDims.z; k++)
             {
                 os << g.Get(i, j, k).Mass << " ";
             }

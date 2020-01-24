@@ -8,6 +8,8 @@ target_sources(
         Common.hpp
         Math.cpp
         Math.hpp
+        Assert.cpp
+        Assert.hpp
     PUBLIC
 )
 

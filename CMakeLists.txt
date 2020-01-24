@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project (snow)
 
+set(CMAKE_BUILD_TYPE Debug)
 
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 0)
@@ -14,6 +15,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # GTest
 ADD_SUBDIRECTORY(extlib/gtest)
+ADD_SUBDIRECTORY(extlib/svd)
+
 enable_testing()
 include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
 
@@ -24,7 +27,7 @@ include_directories(${PROJECT_SOURCE_DIRECTORY}/solver)
 include_directories(${PROJECT_SOURCE_DIRECTORY}/utils)
 
 # Testing
-# ADD_SUBDIRECTORY(test)
+ADD_SUBDIRECTORY(test)
 
 # Binaries
-add_subdirectory(src)
+ADD_SUBDIRECTORY(src)

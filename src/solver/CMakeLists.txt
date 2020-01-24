@@ -9,8 +9,10 @@ target_sources(
         CPUSolver.hpp
         Grid.cpp
         Grid.hpp
-        Particle.cpp
-        Particle.hpp
+        ParticleSystem.cpp
+        ParticleSystem.hpp
+        SimulationParameters.cpp
+        SimulationParameters.hpp
     PUBLIC
 )
 

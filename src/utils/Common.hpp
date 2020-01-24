@@ -2,17 +2,16 @@
 
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <cassert>
+#include <cmath>
 
 // Numeric types
 using Uint = uint64_t;
-using Float = float;
-using Vec3 = glm::vec3;
-using Mat3 = glm::mat3;
+using Float = double;
+using Vec3 = glm::dvec3;
+using Mat3 = glm::dmat3;
+using IVec3 = glm::ivec3;
 
-static const Float H = 1.0; // cell size
-static const Float HARDENING = 1.0;
-static const Float MU_0 = 1.0;
-static const Float LAMBDA_0 = 1.0;
-static const Float PHI_C = 0.025;
-static const Float PHI_S = 0.0075;
-static const Float ALPHA = 0.95;
+static const Float EPSILON = 2.2204460492503131e-016;
+
+#include <assert.hpp>

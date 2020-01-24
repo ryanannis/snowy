@@ -1,6 +1,7 @@
 add_executable(
     unit_tests
     rasterization_tests.cpp
+    integration_tests.cpp
 )
 
 target_link_libraries(
