@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <cassert>
 #include <cmath>
+#include <glm/gtx/string_cast.hpp>
 
 // Numeric types
 using Uint = uint64_t;

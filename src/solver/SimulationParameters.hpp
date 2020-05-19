@@ -3,12 +3,12 @@
 #include "Common.hpp"
 
 struct SimulationParameters {
-    Float H = 0.001; // cell size
-    Float HARDENING = 1.0;
-    Float MU_0 = 1.0;
-    Float LAMBDA_0 = 1.0;
+    Float H = 1.0; // cell size
+    Float HARDENING = 10.0;
+    Float MU_0 = 58333.0;
+    Float LAMBDA_0 = 38888.0;
     Float PHI_C = 0.025;
-    Float PHI_S = 0.0075;
+    Float PHI_S = 0.005;
     Float ALPHA = 0.95;
     Float GRAVITY = -9.81;
 };

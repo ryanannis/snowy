@@ -72,10 +72,7 @@ void ParticleSystem::UpdateDeformationGradients(Float dt, const Grid& g)
         Mat3 v(1.0);
         svd3(new_fe, u, s, v);
 
-        auto test = u * s * glm::transpose(v) - new_fe;
-
-        //assert((u * s * glm::transpose(v) - new_fe)[0][0] < 0.0000001);
-
+        // Todo:  Add an assert for reconstructing the SVD - I have a bad history with SVD libraries
 
         Mat3 sinv(1.0);
 
@@ -124,10 +121,10 @@ void ParticleSystem::EstimateParticleVolumes(Grid& g)
 }
 
 
-void ParticleSystem::CalculateFlipPicVelocity(const Particle& p, const Grid& g, Vec3& flip, Vec3& pic) const
+void ParticleSystem::CalculateFlipPicVelocity(const Particle& p, const Grid& g, Vec3& flip, Vec3& pic, bool fag) const
 {
     flip = Vec3(0.0);
-    pic = Vec3(0.0);
+    pic = p.velocity;
 
     WeightOverParticleNeighbourhood(
         mParams, g, p.pos,
@@ -142,12 +139,15 @@ void ParticleSystem::CalculateFlipPicVelocity(const Particle& p, const Grid& g, 
 
 void ParticleSystem::UpdateVelocities(const Grid& g)
 {
-    for (Particle& p : mParticles) 
+    int i = 0;
+    for (Uint i = 0; i < mParticles.size(); i++) 
     {
+        Particle& p = mParticles[i];
+
         Vec3 flip;
         Vec3 pic;
 
-        CalculateFlipPicVelocity(p, g, flip, pic);
+        CalculateFlipPicVelocity(p, g, pic, flip, i == 101);
         p.velocity = (1 - mParams.ALPHA) * pic + mParams.ALPHA * flip;
     }
 }

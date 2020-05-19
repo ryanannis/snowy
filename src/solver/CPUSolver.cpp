@@ -5,6 +5,7 @@
 
 #include "Math.hpp"
 
+
 CPUSolver::CPUSolver(const IVec3& gridDimensions, Float frameLength, const SimulationParameters& params) :
     mGrid(std::make_unique<Grid>(params, gridDimensions)),
     mParticleSystem(std::make_unique<ParticleSystem>(params)),
@@ -48,10 +49,13 @@ void CPUSolver::Step(Float timestep)
     // @10:  Update particle positions
     mParticleSystem->UpdatePositions(timestep);
 
+    // We've transferred everything to the particles.  Reset the accumulators.
+    mGrid->ResetGrid();
+
     mStepNum++;
 }
 
-const std::vector<Particle>& CPUSolver::NextFrame()
+void CPUSolver::NextFrame()
 {
     // Just do a constant timestep for now...  (TODO)
     const Float timestep = 0.0001;
@@ -66,10 +70,17 @@ const std::vector<Particle>& CPUSolver::NextFrame()
         std::cout << "[" << p.velocity.x << "," << p.velocity.y << "," << p.velocity.z << "]" << std::endl;
         std::cout << "[" << p.pos.x << "," << p.pos.y << "," << p.pos.z << "]" << std::endl;
 
+        std::cout << "[" << p.m_F_p[0][0] << "," << p.m_F_p[1][1] << "," << p.m_F_p[2][2] << "]" << std::endl;
+
         Step(mFrameLength / Float(stepsPerFrame));
     }
+}
 
-    return mParticleSystem->GetParticles();
+const std::shared_ptr<SimulationOutput> CPUSolver::GetOutput()
+{
+    return std::shared_ptr<SimulationOutput>(
+        new SimulationOutput(mParticleSystem->GetParticles())
+    );
 }
 
 void CPUSolver::AddParticle(const Vec3& pos, const Vec3& velocity, const Float mass)

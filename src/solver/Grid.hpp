@@ -2,6 +2,7 @@
 
 #include "Common.hpp"
 
+#include "Math.hpp"
 #include <iostream>
 #include <vector>
 #include <memory>
@@ -13,18 +14,23 @@ class ParticleSystem;
 
 std::ostream &operator<<(std::ostream &os, Grid const &g);
 
-// Yeah this shouldn't be here
-Vec3 gridWeightGrad(const SimulationParameters& s, Float x, Float ix, Float y, Float iy, Float z, Float iz);
-Float gridWeight(const SimulationParameters& s, Float x, Float ix, Float y, Float iy, Float z, Float iz);
-
 // Accepts a lambda (IVec grid_coordinate, Float weight)
+// BIG TODO:
+// This is an optimization nightmare
+// (1) Verify if the lambda call optimizes automatically with gdb and MSVC, and if there's any way to do that.
+//     This is the hottest function in the program.
+// (2) This currently iterates over a radius of 3 even though the kernel radius of 2.  This was because there's
+//     some edge cases involving floats equaling integer values - and I didn't want to take any chances before
+//     I could get some correct verification data.  I should come back to this later (also possibly cache weight
+//     values?)
+//
 template<typename Func>
 void WeightOverParticleNeighbourhood(const SimulationParameters& s, const Grid& g, const Vec3& Position, Func f) {
-    for (int i = -1; i < 2; i++)
+    for (int i = -2; i < 3; i++)
     {
-        for (int j = -1; j < 2; j++)
+        for (int j = -2; j < 3; j++)
         {
-            for (int k = -1; k < 2; k++)
+            for (int k = -2; k < 3; k++)
             {
                 // The coordinate of the cell we are rasterizing to
                 int ix = static_cast<int>(Position.x / s.H) + i;
@@ -37,7 +43,7 @@ void WeightOverParticleNeighbourhood(const SimulationParameters& s, const Grid& 
                     continue;
                 }
 
-                Float nx = gridWeight(s, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
+                Float nx = gridWeight(s.H, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
 
                 f(IVec3(ix, iy, iz), nx);
             }
@@ -47,11 +53,11 @@ void WeightOverParticleNeighbourhood(const SimulationParameters& s, const Grid& 
 
 template<typename Func>
 void WeightGradOverParticleNeighbourhood(const SimulationParameters& s, const Grid& g, const Vec3& Position, Func f) {
-    for (int i = -1; i < 2; i++)
+    for (int i = -2; i < 3; i++)
     {
-        for (int j = -1; j < 2; j++)
+        for (int j = -2; j < 3; j++)
         {
-            for (int k = -1; k < 2; k++)
+            for (int k = -2; k < 3; k++)
             {
                 // The coordinate of the cell we are rasterizing to
                 int ix = static_cast<int>(Position.x / s.H) + i;
@@ -64,7 +70,7 @@ void WeightGradOverParticleNeighbourhood(const SimulationParameters& s, const Gr
                     continue;
                 }
 
-                Vec3 nxgrad = gridWeightGrad(s, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
+                Vec3 nxgrad = gridWeightGrad(s.H, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
 
                 f(IVec3(ix, iy, iz), nxgrad);
             }
@@ -103,6 +109,7 @@ public:
     void UpdateGridVelocities(Float timestep);
     void DoGridBasedCollisions(Float timestep);
     void SolveLinearSystem(Float timestep);
+    void ResetGrid();
 
 private:
     Uint coordToIdx(Uint i, Uint j, Uint k) const;

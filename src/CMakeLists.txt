@@ -17,3 +17,10 @@ target_link_libraries(
     solverlib
     utils
 )
+
+# OpenVDB
+target_link_libraries(
+    main
+    openvdb
+    Half-2_3
+)

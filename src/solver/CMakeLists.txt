@@ -13,6 +13,11 @@ target_sources(
         ParticleSystem.hpp
         SimulationParameters.cpp
         SimulationParameters.hpp
+        SimulationOutput.hpp
+        SimulationOutput.cpp
+        OvdbConverter.hpp
+        OvdbConverter.cpp
+        Solver.hpp
     PUBLIC
 )
 

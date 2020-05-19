@@ -42,10 +42,9 @@ public:
     std::vector<Particle>& GetParticles();
     const std::vector<Particle>& GetParticles() const;
 
-
 private:
     Vec3 CalculatePICVelocity(const Particle& p, const Grid& g) const;
-    void CalculateFlipPicVelocity(const Particle& p, const Grid& g, Vec3& flip, Vec3& pic) const;
+    void CalculateFlipPicVelocity(const Particle& p, const Grid& g, Vec3& flip, Vec3& pic, bool fag) const;
     Mat3 CalculateVelocityGradient(const Particle& p, const Grid& g) const;
 
     const SimulationParameters& mParams;
