@@ -36,7 +36,7 @@ void Grid::RasterizeParticlesToGrid(const ParticleSystem& ps, MTIterator& mt)
 {
     mt.IterateOverVector(ps.GetParticles(), [&](const Particle& particle) {
         WeightOverParticleNeighbourhood(
-            mParams, *this, particle,
+            mParams, *this, particle.pos,
             [&](IVec3 pos, Float weight) {
                 // Transfer mass
                 Cell& c = Get(pos.x, pos.y, pos.z);
