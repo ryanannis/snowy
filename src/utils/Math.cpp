@@ -49,7 +49,6 @@ Float N_x(Float x)
     {
         res = 0;
     }
-    
 
     ASSERT_VALID_FLOAT(res);
 

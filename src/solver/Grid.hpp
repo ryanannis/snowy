@@ -8,8 +8,10 @@
 #include <memory>
 #include <glm/glm.hpp>
 #include "SimulationParameters.hpp"
+#include <mutex>
 
 class Grid;
+class MTIterator;
 class ParticleSystem;
 
 std::ostream &operator<<(std::ostream &os, Grid const &g);
@@ -45,6 +47,12 @@ void WeightOverParticleNeighbourhood(const SimulationParameters& s, const Grid& 
 
                 Float nx = gridWeight(s.H, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
 
+                if (nx == 0) {
+                    // PERF TODO:  we're going over a 5*5 instead of 4*4 to avoid stupid boundary cases with inequalities
+                    // then skipping when the grad is 0...  we can do better than this
+                    continue;
+                }
+
                 f(IVec3(ix, iy, iz), nx);
             }
         }
@@ -71,6 +79,13 @@ void WeightGradOverParticleNeighbourhood(const SimulationParameters& s, const Gr
                 }
 
                 Vec3 nxgrad = gridWeightGrad(s.H, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
+                Float nx = gridWeight(s.H, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
+                if (nxgrad != Vec3(0))
+                {
+                    continue;
+                    // PERF TODO:  we're going over a 5*5 instead of 4*4 to avoid stupid boundary cases with inequalities
+                    // then skipping when the grad is 0...  we can do better than this
+                }
 
                 f(IVec3(ix, iy, iz), nxgrad);
             }
@@ -81,6 +96,18 @@ void WeightGradOverParticleNeighbourhood(const SimulationParameters& s, const Gr
 class Cell {
 public:
     Cell() = default;
+
+    // We manually lock and unlock mutexes per Cell because 
+    // we might not to lock everywhere and operations involving
+    // cells are usually very performance sensitive
+    inline void Lock() {
+        mMutex.lock();
+    }
+    
+    inline void Unlock() 
+    {
+        mMutex.unlock();
+    }
 
     // Inputs - transferred from particles each step
     Float Mass = 0;
@@ -93,6 +120,9 @@ public:
     Vec3 VelocityStar = {};
     Vec3 VelocityNext = {};
 
+private:
+    std::mutex mMutex;
+ 
 };
 
 class Grid {
@@ -100,15 +130,15 @@ public:
     Grid(const SimulationParameters& params, const IVec3& dims);
 
     Cell& Get(Uint i, Uint j, Uint k);
-    Cell Get(Uint i, Uint j, Uint k) const;
+    const Cell& Get(Uint i, Uint j, Uint k) const;
 
     const IVec3& Dims() const;
 
-    void RasterizeParticlesToGrid(const ParticleSystem& ps);
-    void ComputeGridForces(const ParticleSystem& ps);
-    void UpdateGridVelocities(Float timestep);
-    void DoGridBasedCollisions(Float timestep);
-    void SolveLinearSystem(Float timestep);
+    void RasterizeParticlesToGrid(const ParticleSystem& ps, MTIterator& mt);
+    void ComputeGridForces(const ParticleSystem& ps, MTIterator& mt);
+    void UpdateGridVelocities(Float timestep, MTIterator& mt);
+    void DoGridBasedCollisions(Float timestep, MTIterator& mt);
+    void SolveLinearSystem(Float timestep, MTIterator& mt);
     void ResetGrid();
 
 private:

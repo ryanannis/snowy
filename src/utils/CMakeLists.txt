@@ -10,6 +10,8 @@ target_sources(
         Math.hpp
         Assert.cpp
         Assert.hpp
+        Multithread.hpp
+        Multithread.cpp
     PUBLIC
 )
 

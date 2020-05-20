@@ -1,5 +1,6 @@
 #include "Grid.hpp"
 #include "ParticleSystem.hpp"
+#include "Multithread.hpp"
 
 // This is called with coordinates normalized to the size of the grid
 // (eg. divided by h)
@@ -9,14 +10,14 @@ Grid::Grid(const SimulationParameters& params, const IVec3& dims) :
     mDims(dims),
     mCells(dims.x * dims.y * dims.z)
 {
-}
+} 
 
 Cell& Grid::Get(Uint i, Uint j, Uint k)
 {
     return mCells[coordToIdx(i, j, k)];
 }
 
-Cell Grid::Get(Uint i, Uint j, Uint k) const
+const Cell& Grid::Get(Uint i, Uint j, Uint k) const
 {
     return mCells[coordToIdx(i, j, k)];
 }
@@ -31,63 +32,66 @@ Uint Grid::coordToIdx(Uint i, Uint j, Uint k) const
     return i + mDims.x * j + mDims.x * mDims.y * k;
 }
 
-void Grid::RasterizeParticlesToGrid(const ParticleSystem& ps)
+void Grid::RasterizeParticlesToGrid(const ParticleSystem& ps, MTIterator& mt)
 {
-    for (const auto& particle : ps.GetParticles())
-    {
+    mt.IterateOverVector(ps.GetParticles(), [&](const Particle& particle) {
         WeightOverParticleNeighbourhood(
-            mParams, *this, particle.pos,
+            mParams, *this, particle,
             [&](IVec3 pos, Float weight) {
                 // Transfer mass
                 Cell& c = Get(pos.x, pos.y, pos.z);
-                Get(pos.x, pos.y, pos.z).Mass += weight * particle.mass;
+                
+                c.Lock();
+                c.Mass += weight * particle.mass;
 
                 // Transfer velocity (normalized)
-                Get(pos.x, pos.y, pos.z).Velocity += particle.velocity * particle.mass * weight;
+                c.Velocity += particle.velocity * particle.mass * weight;
+                c.Unlock();
             }
         );
-    }
+    });
 }
 
-void Grid::ComputeGridForces(const ParticleSystem& ps)
+void Grid::ComputeGridForces(const ParticleSystem& ps, MTIterator& mt)
 {
-    for (const auto& particle : ps.GetParticles()) {
+    mt.IterateOverVector(ps.GetParticles(), [&](const Particle& particle) {
         WeightGradOverParticleNeighbourhood(
             mParams, *this, particle.pos,
             [&](IVec3 pos, Vec3 weightgrad) {
                 Mat3 stress = -ps.CalculateCauchyStress(particle);
                 Vec3 dforce = particle.volume * stress * weightgrad;
                 ASSERT_VALID_VEC3(dforce);
-
-                Get(pos.x, pos.y, pos.z).Force += dforce;
                 
+                Cell& c = Get(pos.x, pos.y, pos.z);
+                c.Lock();
+                c.Force += dforce;
+                c.Unlock();
             }
         );
-    }
+    });
 }
 
-void Grid::UpdateGridVelocities(Float timestep) {
-    for (auto& c : mCells) {        
+void Grid::UpdateGridVelocities(Float timestep, MTIterator& mt) {
+    mt.IterateOverVector(mCells, [&](Cell& c) {
         if(c.Mass > 0) {
             c.Velocity /= c.Mass; // normalize velocity for energy conservation
             c.Force += Vec3(0.0, 0.0, mParams.GRAVITY * c.Mass);
             c.VelocityStar += c.Velocity + timestep / c.Mass * c.Force;
             ASSERT_VALID_VEC3(c.VelocityStar);
         }
-    }
+    });
 }
 
-void Grid::DoGridBasedCollisions(Float timestep)
+void Grid::DoGridBasedCollisions(Float timestep, MTIterator& mt)
 {
     // todo:
 }
 
-void Grid::SolveLinearSystem(Float timestep)
+void Grid::SolveLinearSystem(Float timestep, MTIterator& mt)
 {
-    // todo:  only explicit update right nowD
-    for (auto& c : mCells) {
-        c.VelocityNext = c.VelocityStar;
-    }
+    mt.IterateOverVector(mCells, [&](Cell& c) {
+        c.VelocityNext = c.VelocityStar;   
+    });
 }
 
 void Grid::ResetGrid()

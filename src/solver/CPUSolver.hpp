@@ -5,6 +5,7 @@
 
 #include "ParticleSystem.hpp"
 #include "Grid.hpp"
+#include "Multithread.hpp"
 
 class Grid;
 class ParticleSystem;
@@ -29,4 +30,5 @@ private:
     std::unique_ptr<Grid> mGrid;
     std::unique_ptr<ParticleSystem> mParticleSystem;
     Uint mStepNum;
+    MTIterator mMt;
 };

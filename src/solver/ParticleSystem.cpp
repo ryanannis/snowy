@@ -2,6 +2,7 @@
 
 #include "Grid.hpp"
 #include "Math.hpp"
+#include "Multithread.hpp"
 #include "glm/gtx/matrix_operation.hpp"
 
 Particle::Particle(const Vec3& pos, Float mass, const Vec3& velocity) :
@@ -55,14 +56,53 @@ Mat3 ParticleSystem::CalculateCauchyStress(const Particle& p) const
     return result;
 }
  
-void ParticleSystem::BodyCollisions(Float dt)
+void ParticleSystem::BodyCollisions(Float dt, MTIterator& mt)
 {
 }
 
-void ParticleSystem::UpdateDeformationGradients(Float dt, const Grid& g)
+void ParticleSystem::CacheParticleGrads(const Grid& g, MTIterator& mt)
 {
-    for (Particle& p : mParticles)
-    {
+    mt.IterateOverVector(mParticles, [&](Particle& p) {
+        const auto& Position = p.pos;
+        const auto& H = mParams.H;
+        p.numNeighbours=0;
+        for (int i = -2; i < 3; i++)
+        {
+            for (int j = -2; j < 3; j++)
+            {
+                for (int k = -2; k < 3; k++)
+                {
+                    // The coordinate of the cell we are rasterizing to
+                    int ix = static_cast<int>(Position.x / H) + i;
+                    int iy = static_cast<int>(Position.y / H) + j;
+                    int iz = static_cast<int>(Position.z / H) + k;
+
+                    // Check bounds
+                    if (ix < 0 || iy < 0 || iz < 0 ||
+                        ix >= g.Dims().x || iy >= g.Dims().y || iz >= g.Dims().z) {
+                        continue;
+                    }
+
+                    Vec3 nxgrad = gridWeightGrad(H, Position.x / H, ix, Position.y / H, iy, Position.z / H, iz);
+                    Float nx = gridWeight(H, Position.x / H, ix, Position.y / H, iy, Position.z / H, iz);
+                    if (nxgrad == Vec3(0) && nx != 0)
+                    {
+                        assert(p.numNeighbours < 9);
+                        p.neighbours_coords[p.numNeighbours] = IVec3(ix, iy, iz);
+                        p.neighbours_nx[p.numNeighbours] = nx;
+                        p.neighbours_nxgrad[p.numNeighbours] = nxgrad;
+                        p.numNeighbours++;
+                    }
+
+                }
+            }
+        }
+    });
+}
+
+void ParticleSystem::UpdateDeformationGradients(Float dt, const Grid& g, MTIterator& mt)
+{
+    mt.IterateOverVector(mParticles, [&](Particle& p) {
         // First attribute all new changes to elastic part of deformation
         Mat3 new_fe = (Mat3(Float(1.0)) + dt * CalculateVelocityGradient(p, g)) * p.m_F_e;
         Mat3 new_f = new_fe * p.m_F_p;
@@ -93,13 +133,12 @@ void ParticleSystem::UpdateDeformationGradients(Float dt, const Grid& g)
         ASSERT_VALID_MAT3(p.m_F_e);
         ASSERT_VALID_MAT3(p.m_F_p);
         ASSERT_VALID_MAT3(p.m_R_e);
-    }
+    });
 }
 
-void ParticleSystem::EstimateParticleVolumes(Grid& g)
+void ParticleSystem::EstimateParticleVolumes(const Grid& g, MTIterator& mt)
 {
-    for (auto& particle : mParticles) 
-    {
+    mt.IterateOverVector(mParticles, [&](Particle& particle) {
         Float particleDensity = 0;
 
         WeightOverParticleNeighbourhood(
@@ -117,11 +156,11 @@ void ParticleSystem::EstimateParticleVolumes(Grid& g)
         if(particleDensity > 0) {
             particle.volume = particle.mass / particleDensity;
         }
-    }
+    });
 }
 
 
-void ParticleSystem::CalculateFlipPicVelocity(const Particle& p, const Grid& g, Vec3& flip, Vec3& pic, bool fag) const
+void ParticleSystem::CalculateFlipPicVelocity(const Particle& p, const Grid& g, Vec3& flip, Vec3& pic) const
 {
     flip = Vec3(0.0);
     pic = p.velocity;
@@ -137,28 +176,23 @@ void ParticleSystem::CalculateFlipPicVelocity(const Particle& p, const Grid& g, 
     );
 }
 
-void ParticleSystem::UpdateVelocities(const Grid& g)
+void ParticleSystem::UpdateVelocities(const Grid& g, MTIterator& mt)
 {
-    int i = 0;
-    for (Uint i = 0; i < mParticles.size(); i++) 
-    {
-        Particle& p = mParticles[i];
-
+    mt.IterateOverVector(mParticles, [&](Particle& p) {
         Vec3 flip;
         Vec3 pic;
 
-        CalculateFlipPicVelocity(p, g, pic, flip, i == 101);
+        CalculateFlipPicVelocity(p, g, pic, flip);
         p.velocity = (1 - mParams.ALPHA) * pic + mParams.ALPHA * flip;
-    }
+    });
 }
 
 
-void ParticleSystem::UpdatePositions(Float dt) 
+void ParticleSystem::UpdatePositions(Float dt, MTIterator& mt) 
 {
-    for (Particle& p : mParticles) 
-    {
+    mt.IterateOverVector(mParticles, [&](Particle& p) {
         p.pos += dt * p.velocity; 
-    }
+    });
 }
 
 std::vector<Particle>& ParticleSystem::GetParticles()

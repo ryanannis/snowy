@@ -10,7 +10,8 @@ CPUSolver::CPUSolver(const IVec3& gridDimensions, Float frameLength, const Simul
     mGrid(std::make_unique<Grid>(params, gridDimensions)),
     mParticleSystem(std::make_unique<ParticleSystem>(params)),
     mFrameLength(frameLength),
-    mStepNum(0)
+    mStepNum(0),
+    mMt(12) // TODO:  make customization - 12 threads for now
 {
 }
 
@@ -18,36 +19,38 @@ void CPUSolver::Step(Float timestep)
 {
     std::cout << "Beginning step " << mStepNum << "." << std::endl;
 
+    mParticleSystem->CacheParticleGrads(*mGrid, mMt);
+
     // @1:  Rasterize particle data to the grid
-    mGrid->RasterizeParticlesToGrid(*mParticleSystem);
+    mGrid->RasterizeParticlesToGrid(*mParticleSystem, mMt);
 
     // @2:  Compute particle volumes and densities
     if(mStepNum == 0)
-        mParticleSystem->EstimateParticleVolumes(*mGrid);
+        mParticleSystem->EstimateParticleVolumes(*mGrid, mMt);
 
     // @3: Compute grid forces
-    mGrid->ComputeGridForces(*mParticleSystem);
+    mGrid->ComputeGridForces(*mParticleSystem, mMt);
 
     // @4: Compute grid forces
-    mGrid->UpdateGridVelocities(timestep);
+    mGrid->UpdateGridVelocities(timestep, mMt);
 
     // @5:  Grid based body collisions
-    mGrid->DoGridBasedCollisions(timestep);
+    mGrid->DoGridBasedCollisions(timestep, mMt);
 
     // @6:  Solve linear system
-    mGrid->SolveLinearSystem(timestep);
+    mGrid->SolveLinearSystem(timestep, mMt);
 
     // @7: Update deformation gradient
-    mParticleSystem->UpdateDeformationGradients(timestep, *mGrid);
+    mParticleSystem->UpdateDeformationGradients(timestep, *mGrid, mMt);
 
     // @8: Update Particle Velocities
-    mParticleSystem->UpdateVelocities(*mGrid);
+    mParticleSystem->UpdateVelocities(*mGrid, mMt);
 
     // @9: Particle-based body collisions  
-    mParticleSystem->BodyCollisions(timestep);
+    mParticleSystem->BodyCollisions(timestep, mMt);
 
     // @10:  Update particle positions
-    mParticleSystem->UpdatePositions(timestep);
+    mParticleSystem->UpdatePositions(timestep, mMt);
 
     // We've transferred everything to the particles.  Reset the accumulators.
     mGrid->ResetGrid();
