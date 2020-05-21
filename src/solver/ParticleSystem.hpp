@@ -12,6 +12,9 @@ class Grid;
 class ParticleSystem;
 class MTIterator;
 
+// todo:  this class is getting fat and is almost 1kb at this point.
+// It may be a performance improvement to split this up, because the data is being accessed 
+// contiguously anyways, 
 class Particle {
 public:
     Vec3 pos;
@@ -25,9 +28,9 @@ public:
     // We cache this since it ends up being quite expensive
     // to do this every time (calculating the gradient is 27 branches )
     Uint numNeighbours;
-    std::array<IVec3, 9> neighbours_coords;
-    std::array<Float, 9> neighbours_nx;
-    std::array<Vec3, 9> neighbours_nxgrad;
+    std::array<IVec3, 64> neighbours_coords;
+    std::array<Float, 64> neighbours_nx;
+    std::array<Vec3, 64> neighbours_nxgrad;
 
 private:
     Particle(const Vec3& pos, Float mass, const Vec3& velocity);

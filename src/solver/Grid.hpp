@@ -10,6 +10,9 @@
 #include "SimulationParameters.hpp"
 #include <mutex>
 
+// todo:  this is needed in here because we have the Weighting templates...  we should just move those somewhere else...
+#include "ParticleSystem.hpp"
+
 class Grid;
 class MTIterator;
 class ParticleSystem;
@@ -27,69 +30,20 @@ std::ostream &operator<<(std::ostream &os, Grid const &g);
 //     values?)
 //
 template<typename Func>
-void WeightOverParticleNeighbourhood(const SimulationParameters& s, const Grid& g, const Vec3& Position, Func f) {
-    for (int i = -2; i < 3; i++)
+void WeightOverParticleNeighbourhood(const SimulationParameters& s, const Particle& p, Func f)
+{
+    for (Uint i = 0; i < p.numNeighbours; i++)
     {
-        for (int j = -2; j < 3; j++)
-        {
-            for (int k = -2; k < 3; k++)
-            {
-                // The coordinate of the cell we are rasterizing to
-                int ix = static_cast<int>(Position.x / s.H) + i;
-                int iy = static_cast<int>(Position.y / s.H) + j;
-                int iz = static_cast<int>(Position.z / s.H) + k;
-
-                // Check bounds
-                if (ix < 0 || iy < 0 || iz < 0 || 
-                    ix >= g.Dims().x || iy >= g.Dims().y || iz>= g.Dims().z) {
-                    continue;
-                }
-
-                Float nx = gridWeight(s.H, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
-
-                if (nx == 0) {
-                    // PERF TODO:  we're going over a 5*5 instead of 4*4 to avoid stupid boundary cases with inequalities
-                    // then skipping when the grad is 0...  we can do better than this
-                    continue;
-                }
-
-                f(IVec3(ix, iy, iz), nx);
-            }
-        }
+        f(p.neighbours_coords[i], p.neighbours_nx[i]);
     }
 }
 
 template<typename Func>
-void WeightGradOverParticleNeighbourhood(const SimulationParameters& s, const Grid& g, const Vec3& Position, Func f) {
-    for (int i = -2; i < 3; i++)
+void WeightGradOverParticleNeighbourhood(const SimulationParameters& s, const Particle& p, Func f)
+{
+    for (Uint i = 0; i < p.numNeighbours; i++)
     {
-        for (int j = -2; j < 3; j++)
-        {
-            for (int k = -2; k < 3; k++)
-            {
-                // The coordinate of the cell we are rasterizing to
-                int ix = static_cast<int>(Position.x / s.H) + i;
-                int iy = static_cast<int>(Position.y / s.H) + j;
-                int iz = static_cast<int>(Position.z / s.H) + k;
-
-                // Check bounds
-                if (ix < 0 || iy < 0 || iz < 0 ||
-                    ix >= g.Dims().x || iy >= g.Dims().y || iz >= g.Dims().z) {
-                    continue;
-                }
-
-                Vec3 nxgrad = gridWeightGrad(s.H, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
-                Float nx = gridWeight(s.H, Position.x / s.H, ix, Position.y / s.H, iy, Position.z / s.H, iz);
-                if (nxgrad != Vec3(0))
-                {
-                    continue;
-                    // PERF TODO:  we're going over a 5*5 instead of 4*4 to avoid stupid boundary cases with inequalities
-                    // then skipping when the grad is 0...  we can do better than this
-                }
-
-                f(IVec3(ix, iy, iz), nxgrad);
-            }
-        }
+        f(p.neighbours_coords[i], p.neighbours_nxgrad[i]);
     }
 }
 
@@ -122,7 +76,6 @@ public:
 
 private:
     std::mutex mMutex;
- 
 };
 
 class Grid {

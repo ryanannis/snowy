@@ -35,28 +35,25 @@ Uint Grid::coordToIdx(Uint i, Uint j, Uint k) const
 void Grid::RasterizeParticlesToGrid(const ParticleSystem& ps, MTIterator& mt)
 {
     mt.IterateOverVector(ps.GetParticles(), [&](const Particle& particle) {
-        WeightOverParticleNeighbourhood(
-            mParams, *this, particle.pos,
+        WeightOverParticleNeighbourhood(mParams, particle,
             [&](IVec3 pos, Float weight) {
                 // Transfer mass
                 Cell& c = Get(pos.x, pos.y, pos.z);
-                
+
                 c.Lock();
                 c.Mass += weight * particle.mass;
 
                 // Transfer velocity (normalized)
                 c.Velocity += particle.velocity * particle.mass * weight;
                 c.Unlock();
-            }
-        );
+            });
     });
 }
 
 void Grid::ComputeGridForces(const ParticleSystem& ps, MTIterator& mt)
 {
     mt.IterateOverVector(ps.GetParticles(), [&](const Particle& particle) {
-        WeightGradOverParticleNeighbourhood(
-            mParams, *this, particle.pos,
+        WeightGradOverParticleNeighbourhood(mParams, particle,
             [&](IVec3 pos, Vec3 weightgrad) {
                 Mat3 stress = -ps.CalculateCauchyStress(particle);
                 Vec3 dforce = particle.volume * stress * weightgrad;

@@ -5,6 +5,8 @@
 #include "Multithread.hpp"
 #include "glm/gtx/matrix_operation.hpp"
 
+#include <exception>
+
 Particle::Particle(const Vec3& pos, Float mass, const Vec3& velocity) :
     pos(pos),
     mass(mass),
@@ -31,7 +33,7 @@ Mat3 ParticleSystem::CalculateVelocityGradient(const Particle& p, const Grid& g)
     Mat3 velGrad = Mat3(Float(0.0));
 
     WeightGradOverParticleNeighbourhood(
-        mParams, g, p.pos,
+        mParams, p,
         [&](IVec3 pos, Vec3 weightgrad) {
             velGrad += glm::outerProduct(g.Get(pos.x, pos.y, pos.z).VelocityStar, weightgrad);
         }
@@ -65,7 +67,9 @@ void ParticleSystem::CacheParticleGrads(const Grid& g, MTIterator& mt)
     mt.IterateOverVector(mParticles, [&](Particle& p) {
         const auto& Position = p.pos;
         const auto& H = mParams.H;
-        p.numNeighbours=0;
+
+        p.numNeighbours = 0;
+        
         for (int i = -2; i < 3; i++)
         {
             for (int j = -2; j < 3; j++)
@@ -85,14 +89,22 @@ void ParticleSystem::CacheParticleGrads(const Grid& g, MTIterator& mt)
 
                     Vec3 nxgrad = gridWeightGrad(H, Position.x / H, ix, Position.y / H, iy, Position.z / H, iz);
                     Float nx = gridWeight(H, Position.x / H, ix, Position.y / H, iy, Position.z / H, iz);
-                    if (nxgrad == Vec3(0) && nx != 0)
+
+                    if (nxgrad == Vec3(0) && nx == 0)
                     {
-                        assert(p.numNeighbours < 9);
-                        p.neighbours_coords[p.numNeighbours] = IVec3(ix, iy, iz);
-                        p.neighbours_nx[p.numNeighbours] = nx;
-                        p.neighbours_nxgrad[p.numNeighbours] = nxgrad;
-                        p.numNeighbours++;
+                        continue;
                     }
+
+                    
+                    if(p.numNeighbours > 63) 
+                    {
+                        throw std::exception("Error in creating gradient kernel cache, crashing due to potential data corruption!");
+                    }
+
+                    p.neighbours_coords[p.numNeighbours] = IVec3(ix, iy, iz);
+                    p.neighbours_nx[p.numNeighbours] = nx;
+                    p.neighbours_nxgrad[p.numNeighbours] = nxgrad;
+                    p.numNeighbours++;
 
                 }
             }
@@ -142,7 +154,7 @@ void ParticleSystem::EstimateParticleVolumes(const Grid& g, MTIterator& mt)
         Float particleDensity = 0;
 
         WeightOverParticleNeighbourhood(
-            mParams, g, particle.pos,
+            mParams, particle,
             [&](IVec3 pos, Float weight) {
 
                 Float cellvolume = mParams.H * mParams.H * mParams.H;
@@ -166,7 +178,7 @@ void ParticleSystem::CalculateFlipPicVelocity(const Particle& p, const Grid& g, 
     pic = p.velocity;
 
     WeightOverParticleNeighbourhood(
-        mParams, g, p.pos,
+        mParams, p,
         [&](IVec3 pos, Float weight) {
             // Transfer mass
             const Cell& cell = g.Get(pos.x, pos.y, pos.z);
